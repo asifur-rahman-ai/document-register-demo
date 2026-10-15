@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Document In/Out Register — Demo</title>
+<style>body{margin:0;background:#F5F7F8}</style></head><body>
+
+
+<div id="doc-register"></div>
+
+<style>
+  #doc-register * { box-sizing: border-box; font-family: Calibri, 'Segoe UI', sans-serif; }
+  #doc-register { background:#F5F7F8; padding:0; }
+  .dr-header { background:#152038; padding:22px 28px; }
+  .dr-header-inner { max-width:1040px; margin:0 auto; display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+  .dr-title { color:#fff; font-size:20px; font-weight:700; letter-spacing:.3px; }
+  .dr-subtitle { color:rgba(255,255,255,.55); font-size:12.5px; margin-top:2px; }
+  .dr-badge { color:#2596BE; font-size:12px; font-weight:600; letter-spacing:1px; }
+  .dr-body { max-width:1040px; margin:0 auto; padding:24px 20px 60px; }
+  .dr-tabs { display:flex; margin-bottom:20px; }
+  .dr-tab { flex:1; padding:14px 0; background:rgba(21,32,56,.05); color:#152038; border:none; font-size:15px; font-weight:700; letter-spacing:1.5px; cursor:pointer; border-bottom:3px solid transparent; }
+  .dr-tab.active { background:#152038; color:#fff; border-bottom:3px solid #2596BE; }
+  .dr-glass { background:rgba(255,255,255,.55); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border:1px solid rgba(21,32,56,.08); }
+  .dr-form { padding:22px; margin-bottom:24px; }
+  .dr-form-title { font-size:13px; font-weight:700; color:#152038; margin-bottom:14px; letter-spacing:.5px; }
+  .dr-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px,1fr)); gap:12px; }
+  .dr-field-label { font-size:11.5px; color:rgba(21,32,56,.6); margin-bottom:4px; font-weight:600; }
+  .dr-input { width:100%; border:1px solid rgba(21,32,56,.18); background:rgba(255,255,255,.7); padding:10px 12px; font-size:14px; color:#152038; outline:none; }
+  .dr-input:focus { border-color:#2596BE; }
+  .dr-btn { margin-top:18px; background:#2596BE; color:#fff; border:none; padding:11px 26px; font-size:13.5px; font-weight:700; letter-spacing:.5px; cursor:pointer; }
+  .dr-btn:disabled { opacity:.6; cursor:default; }
+  .dr-search-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .dr-log-title { font-size:13px; font-weight:700; color:#152038; }
+  .dr-log-count { color:rgba(21,32,56,.45); font-weight:400; }
+  .dr-search { width:220px; }
+  .dr-empty, .dr-loading { padding:30px; text-align:center; color:rgba(21,32,56,.5); font-size:13.5px; }
+  .dr-entry { padding:14px 16px; position:relative; margin-bottom:8px; }
+  .dr-del { position:absolute; top:10px; right:10px; background:transparent; border:none; color:rgba(21,32,56,.35); cursor:pointer; font-size:15px; }
+  .dr-entry-date { font-size:11px; color:#2596BE; font-weight:700; margin-bottom:6px; }
+  .dr-entry-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(160px,1fr)); gap:4px 20px; }
+  .dr-entry-field { font-size:13px; color:#152038; }
+  .dr-entry-field .lbl { color:rgba(21,32,56,.5); }
+  .dr-entry-field .val { font-weight:600; }
+  .dr-error { background:#FCEAEA; color:#8C2B2B; padding:10px 14px; margin-bottom:16px; font-size:13.5px; border:1px solid #E8B8B8; }
+</style>
+
+<script>
+(function () {
+  // Leave empty = demo mode (data stays in this browser only).
+  // To use a real Google Sheets backend, paste your Apps Script Web App URL here.
+  const API_URL = "";
+  const DEMO = !API_URL;
+  const KEY = "demo-register-v1";
+  const SEED = {
+    IN: [
+      { date: new Date(Date.now()-86400000*2).toISOString(), envelope: "Sample Shipping Co.", doc: "Legal Notice", pages: "3", pieces: "1", article: "DEMO-1001", receiver: "Staff A", notification: "Manager notified", confirmation: "Signed copy returned" },
+      { date: new Date(Date.now()-86400000).toISOString(), envelope: "Example Trading Ltd.", doc: "Invoice Bundle", pages: "12", pieces: "2", article: "DEMO-1002", receiver: "Staff B", notification: "Accounts notified", confirmation: "Email confirmation" }
+    ],
+    OUT: [
+      { date: new Date(Date.now()-43200000).toISOString(), envelope: "Sample Authority Office", doc: "Reply Letter", sender: "Staff A", notification: "Manager notified", dispatch: "Courier - Demo Express" }
+    ]
+  };
+  function load() { try { return JSON.parse(localStorage.getItem(KEY)) || JSON.parse(JSON.stringify(SEED)); } catch (e) { return JSON.parse(JSON.stringify(SEED)); } }
+  function save(d) { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {} }
+
+  const FIELDS = {
+    IN: [
+      { key: "envelope", label: "Envelope / From", placeholder: "e.g. Sample Shipping Co." },
+      { key: "doc", label: "Document", placeholder: "e.g. Legal Notice" },
+      { key: "pages", label: "Pages", placeholder: "1" },
+      { key: "pieces", label: "Pieces", placeholder: "1" },
+      { key: "article", label: "Article No.", placeholder: "Tracking / article number" },
+      { key: "receiver", label: "Receiver", placeholder: "e.g. Staff Name" },
+      { key: "notification", label: "Notification", placeholder: "Who was notified" },
+      { key: "confirmation", label: "Receive Confirmation", placeholder: "Confirmed by / method" },
+    ],
+    OUT: [
+      { key: "envelope", label: "Envelope / To", placeholder: "Recipient organisation" },
+      { key: "doc", label: "Document", placeholder: "e.g. Reply Letter" },
+      { key: "sender", label: "Sender", placeholder: "Sent by (staff name)" },
+      { key: "notification", label: "Notification", placeholder: "Who was notified" },
+      { key: "dispatch", label: "Courier / Post", placeholder: "Courier name or 'Posted'" },
+    ],
+  };
+
+  let state = { tab: "IN", entries: { IN: [], OUT: [] }, loading: true, saving: false, query: "", error: "" };
+
+  const root = document.getElementById("doc-register");
+
+  function fmtDate(iso) {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    } catch { return iso; }
+  }
+
+  async function apiGet(tab) {
+    if (DEMO) { const d = load(); return d[tab].map((x, i) => ({ ...x, row: i + 2 })).reverse(); }
+    const res = await fetch(`${API_URL}?tab=${tab}`);
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || "Load failed");
+    return json.entries;
+  }
+
+  async function apiPost(body) {
+    if (DEMO) {
+      const d = load();
+      if (body.action === "add") d[body.tab].push({ date: new Date().toISOString(), ...body.entry });
+      if (body.action === "delete") d[body.tab].splice(Number(body.row) - 2, 1);
+      save(d); return { ok: true };
+    }
+    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(body) });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || "Request failed");
+    return json;
+  }
+
+  async function loadAll() {
+    state.loading = true; render();
+    try {
+      const [inRows, outRows] = await Promise.all([apiGet("IN"), apiGet("OUT")]);
+      state.entries.IN = inRows;
+      state.entries.OUT = outRows;
+      state.error = "";
+    } catch (e) {
+      state.error = "Could not load register. Check your connection.";
+    }
+    state.loading = false; render();
+  }
+
+  function switchTab(t) { state.tab = t; state.query = ""; render(); }
+
+  async function addEntry(formData) {
+    const hasContent = Object.values(formData).some((v) => v.trim());
+    if (!hasContent) return;
+    state.saving = true; render();
+    try {
+      await apiPost({ action: "add", tab: state.tab, entry: formData });
+      await loadAll();
+    } catch (e) {
+      state.error = "Save failed. Try again.";
+    }
+    state.saving = false; render();
+  }
+
+  async function removeEntry(row) {
+    try {
+      await apiPost({ action: "delete", tab: state.tab, row });
+      await loadAll();
+    } catch (e) {
+      state.error = "Delete failed. Try again.";
+      render();
+    }
+  }
+
+  function render() {
+    const fields = FIELDS[state.tab];
+    const list = state.entries[state.tab].filter((x) =>
+      state.query.trim() ? Object.values(x).join(" ").toLowerCase().includes(state.query.toLowerCase()) : true
+    );
+
+    root.innerHTML = `
+      <div class="dr-header">
+        <div class="dr-header-inner">
+          <div>
+            <div class="dr-title">Document Register</div>
+            <div class="dr-subtitle">Incoming &amp; Outgoing Correspondence Tracker</div>
+          </div>
+          <div class="dr-badge">DEMO MODE &middot; SAMPLE DATA</div>
+        </div>
+      </div>
+      <div class="dr-body">
+        <div class="dr-tabs">
+          <button class="dr-tab ${state.tab === "IN" ? "active" : ""}" id="tab-in">↓ INCOMING</button>
+          <button class="dr-tab ${state.tab === "OUT" ? "active" : ""}" id="tab-out">↑ OUTGOING</button>
+        </div>
+        ${state.error ? `<div class="dr-error">${state.error}</div>` : ""}
+        <form class="dr-glass dr-form" id="dr-form">
+          <div class="dr-form-title">NEW ${state.tab} ENTRY</div>
+          <div class="dr-grid">
+            ${fields.map(f => `
+              <div>
+                <div class="dr-field-label">${f.label}</div>
+                <input class="dr-input" name="${f.key}" placeholder="${f.placeholder}" />
+              </div>
+            `).join("")}
+          </div>
+          <button type="submit" class="dr-btn" id="dr-submit" ${state.saving ? "disabled" : ""}>
+            ${state.saving ? "SAVING…" : `+ ADD ${state.tab} ENTRY`}
+          </button>
+        </form>
+        <div class="dr-search-row">
+          <div class="dr-log-title">${state.tab} LOG ${!state.loading ? `<span class="dr-log-count">(${list.length})</span>` : ""}</div>
+          <input class="dr-input dr-search" id="dr-search" placeholder="Search entries…" value="${state.query}" />
+        </div>
+        ${
+          state.loading
+            ? `<div class="dr-loading">Loading register…</div>`
+            : list.length === 0
+            ? `<div class="dr-glass dr-empty">No ${state.tab.toLowerCase()} entries yet. Add one above.</div>`
+            : list.map(x => `
+                <div class="dr-glass dr-entry">
+                  <button class="dr-del" data-row="${x.row}" title="Delete entry">✕</button>
+                  <div class="dr-entry-date">${fmtDate(x.date)}</div>
+                  <div class="dr-entry-grid">
+                    ${fields.map(f => x[f.key] ? `
+                      <div class="dr-entry-field"><span class="lbl">${f.label}: </span><span class="val">${x[f.key]}</span></div>
+                    ` : "").join("")}
+                  </div>
+                </div>
+              `).join("")
+        }
+      </div>
+    `;
+
+    document.getElementById("tab-in").onclick = () => switchTab("IN");
+    document.getElementById("tab-out").onclick = () => switchTab("OUT");
+    document.getElementById("dr-search").oninput = (e) => { state.query = e.target.value; render(); document.getElementById("dr-search").focus(); };
+    document.getElementById("dr-form").onsubmit = (e) => {
+      e.preventDefault();
+      const data = new FormData(e.target);
+      const obj = {};
+      fields.forEach(f => obj[f.key] = (data.get(f.key) || "").trim());
+      addEntry(obj);
+    };
+    root.querySelectorAll(".dr-del").forEach(btn => {
+      btn.onclick = () => removeEntry(btn.getAttribute("data-row"));
+    });
+  }
+
+  loadAll();
+})();
+</script>
+
+</body></html>
